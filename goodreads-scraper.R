@@ -7,6 +7,8 @@ library(dplyr)        # Required to use the pipes %>% and some table manipulatio
 library(magrittr)     # Required to use the pipes %>%
 library(rvest)        # Required for read_html
 library(devtools)
+library(httr)
+
 #install_github("ropensci/RSelenium")
 library(RSelenium)    # Required for webscraping with javascript
 
@@ -20,7 +22,7 @@ output.filename <- "GR_TimeTravelersWife.csv"
 #remDr <- remoteDriver(browserName = "firefox", port = 4444) # instantiate remote driver to connect to Selenium Server
 #remDr$open() # open web browser
 
-driver<- rsDriver()  # as per https://stackoverflow.com/questions/42810978/rselenium-through-docker
+driver<- rsDriver(browser = "firefox")  # as per https://stackoverflow.com/questions/42810978/rselenium-through-docker
 remDr <- driver[["client"]]
 
 remDr$navigate(url)
@@ -29,7 +31,8 @@ global.df <- data.frame(book = character(),
                         reviewer = character(),
                         rating = character(),
                         review = character(),
-                        stringsAsFactors = F)
+                        stringsAsFactors = F,
+                        date  = character())
 
 # Main loop going through the website pages
 for(t in 1:10){  #there's only 10 pages available 
@@ -42,25 +45,38 @@ for(t in 1:10){  #there's only 10 pages available
   reviews.list <- lapply(reviews.html, function(x){read_html(x) %>% html_text()} )
   reviews.text <- unlist(reviews.list)
   
+  remDr$close()
+  
+  
   # Cleaning the reviews with Regex
   print("cleaning reviews")
-  reviews.text2 <- gsub("[^A-Za-z\\-]|\\.+"," ",reviews.text) # Removing all characters that are not letters, dash or periods
+  reviews.text2 <- gsub("[^A-Za-z0123456789\\-]|\\.+"," ",reviews.text) # Removing all characters that are not letters, dash or periods
   reviews.clean <- gsub("\n|[ \t]+"," ",reviews.text2)  # Removing the end of line characters and extra spaces
   
+  print(reviews.text2)
   n <- floor(length(reviews)/2)
   reviews.df <- data.frame(book = character(n),
                            reviewer = character(n),
                            rating = character(n),
                            review = character(n),
-                           stringsAsFactors = F)
+                           stringsAsFactors = F,
+                           date = character(n))
   
   # Populating a data frame with the relevant fields
   for(j in 1:n){
     reviews.df$book[j] <- book.title
     
+    #print(reviews.clean[2*j-1])
+    #print(substring(reviews.clean[2*j-1],2,12))
     #Isolating the name of the author of the review
     auth.rat.sep <- regexpr(" rated it | marked it | added it ", reviews.clean[2*j-1])
     reviews.df$reviewer[j] <- substr(reviews.clean[2*j-1], 5, auth.rat.sep-1)
+    
+
+    #print(substr(reviews.clean[2*j-1], 5, test-1))
+    #Isolating the date of the author of the review
+    date <- substring(reviews.clean[2*j-1],2,12)
+    reviews.df$date[j] <- date
     
     #Isolating the rating
     rat.end <- regexpr("· | Shelves| Recommend| review of another edition", reviews.clean[2*j-1])
